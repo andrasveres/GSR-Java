@@ -53,7 +53,7 @@ import org.jfree.util.ShapeUtilities;
 
 public class GSR_read implements ActionListener, KeyListener {
 	
-	String VERSION="PsyGSR 0.2.1c";;
+	String VERSION="PsyGSR 0.2.1c";
 	
 	class Record {	
 		double t;
