@@ -169,10 +169,35 @@ public class GSRDevice {
 		
 		return p;
 	}
+	
+	public void WriteTS() {
+		System.out.println("WriteTS");
+
+		byte[] buff = new byte[64];
+		ByteBuffer bb = ByteBuffer.allocate(65);
+		
+		buff[1] = 0x60;
+		
+		long ts = System.currentTimeMillis();
+				
+		bb.putLong(ts);
+		
+		for(int i=0; i<8; i++) {
+			buff[i+2] = bb.get(i);
+			System.out.println("B "+buff[i+2]);
+		}
+		
+		hid.IntSendOutputReport(buff, 65);
+		hid.IntReadInputReport(bb, 65);
+
+		System.out.println("WriteTS finished");
+
+	}
 
 	public void Disconnect() {
+		System.out.println("Disconnect");
 	    ResetConnected();
-	    
+
 	    System.out.println("Close hid");
 	    hid.CloseHIDDevice();
 	}

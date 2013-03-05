@@ -34,7 +34,7 @@ import org.jfree.util.ShapeUtilities;
 public class GSR_realtime implements ActionListener, KeyListener, WindowListener {
 	GSRDevice GSR = new GSRDevice();
 
-	String VERSION="PsyGSR 0.2.1c";
+	String VERSION="PsyGSR 0.2.1d";
 
 	
 	//double ymax = 2000;

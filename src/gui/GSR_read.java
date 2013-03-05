@@ -17,7 +17,9 @@ import java.nio.ByteBuffer;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.Locale;
+import java.util.TimeZone;
 import java.util.Vector;
 
 import javax.swing.*;
@@ -53,21 +55,29 @@ import org.jfree.util.ShapeUtilities;
 
 public class GSR_read implements ActionListener, KeyListener {
 	
-	String VERSION="PsyGSR 0.2.1c";
+	String VERSION="PsyGSR 0.2.1d";
 	
 	class Record {	
-		double t;
+		long t;
 		double gsr;
 		int bpm;
 		int mark;
 		int bat;
 		Vector<Integer> pp = new Vector<Integer>();
+		
 	}
 	
-	class Meas { 	
-		double dt;
+	class Meas {
+		// timestamp
+		long ts=0;
+		long tsmsec=0;
+		long msec=0;
+
+		
+		long dt=250;
 		Vector<Record> data = new Vector<Record>();
 	}
+	
 	
 	Vector<Meas> meas_list = new Vector<Meas>();
 
@@ -83,7 +93,7 @@ public class GSR_read implements ActionListener, KeyListener {
 	int T_BAT = 3;
 	int T_BPM = 4;
 	int T_PP = 5;
-	int T_DT = 6;
+	int T_TS = 6;
 
 	
 	int[] mem = new int[65536*2];
@@ -202,21 +212,26 @@ public class GSR_read implements ActionListener, KeyListener {
         
         JButton b_save = new JButton("Save");
         JButton b_erase = new JButton("Erase memory");
-        
+        JButton b_sync = new JButton("Synchronize");
+              
         b_save.setActionCommand("save");
         b_erase.setActionCommand("erase");
+        b_sync.setActionCommand("sync");
         
         b_erase.addActionListener(this);
         b_save.addActionListener(this);
+        b_sync.addActionListener(this);
         
         b_save.setEnabled(false);
         b_erase.setEnabled(false);
+        b_sync.setEnabled(false);
         
         JPanel bpanel = new JPanel();
         chart_frame.add(bpanel, BorderLayout.SOUTH);
        
         bpanel.add(b_save);
         bpanel.add(b_erase);
+        bpanel.add(b_sync);
         
         bpanel.add(c_bat);
         bpanel.add(c_pp);
@@ -238,7 +253,7 @@ public class GSR_read implements ActionListener, KeyListener {
 		double alpha = 0.3;
 		double f = 0;
 		
-	    double start = System.currentTimeMillis()/1000.0;
+	    //double start = System.currentTimeMillis()/1000.0;
 	    
 	    //ReadVersion();
 
@@ -246,7 +261,7 @@ public class GSR_read implements ActionListener, KeyListener {
 	    
 	    int block = 0;
 	    
-	    double t=0;
+	    long t=0;
 	    Record rec = new Record();
 	    rec.t = t;
 	    
@@ -284,6 +299,7 @@ public class GSR_read implements ActionListener, KeyListener {
 	    		t=0;
 	    		rec = new Record();
 	    		rec.t=0;
+	    			    		
 	    	}
 	    		    	
 	    	int j=0; 
@@ -315,7 +331,32 @@ public class GSR_read implements ActionListener, KeyListener {
 		        else if(type == T_BAT) rec.bat = data;  	
 		        else if(type == T_MARK) rec.mark = data;
 		        else if(type == T_PP) rec.pp.add(data);  	
-		        else if(type == T_DT) m.dt=data/1000.0;  	
+		        else if(type == T_TS) {
+		        	ByteBuffer bb = ByteBuffer.allocate(65);
+		        	long ll=0;
+		        	
+		        	j+=2;
+		        	
+		        	for(int ii=0; ii<8; ii++) {
+		        		bb.put((byte)(b[j+ii]));
+		        		//System.out.println("B "+b[j+ii]);
+		        	}
+
+		        	j+=8;
+		        	
+		        	// set timestamp
+		        	m.ts = bb.getLong(0);
+		        	
+		        	m.tsmsec = b[j+3]*256*256*256 + b[j+2] * 256*256 + b[j+1] * 256 + b[j];
+		        	j+=4;
+
+		        	m.msec = b[j+3]*256*256*256 + b[j+2] * 256*256 + b[j+1] * 256 + b[j];
+		        	j+=2;
+
+		        	// j will be increased by additional two in for cycle
+		        			           
+		           System.out.println("TS "+m.ts+" TSmsec "+m.tsmsec+" msec "+m.msec);
+		        }
 		        else {
 		        	System.out.println("addr "+j+" UNKNOWN TYPE "+type);
 		        	System.exit(0);
@@ -335,7 +376,8 @@ public class GSR_read implements ActionListener, KeyListener {
 	    	
 	    b_save.setEnabled(true);
         b_erase.setEnabled(true);
-        	        	    	    
+        b_sync.setEnabled(true);
+        
 	    DisplaySeries();
 	    
 
@@ -358,12 +400,24 @@ public class GSR_read implements ActionListener, KeyListener {
 		
 			Meas m = meas_list.get(i);
 			
-    		final Marker currentEnd = new ValueMarker(t);
-            currentEnd.setPaint(Color.black);
-            currentEnd.setLabel("M="+(i+1));
-            currentEnd.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
-            currentEnd.setLabelTextAnchor(TextAnchor.TOP_LEFT);
-            chart.getXYPlot().addDomainMarker(currentEnd);
+			String date="";
+			if(m.ts>0) {
+				long start = m.ts + (m.msec-m.tsmsec);
+				
+				SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US);
+		        GregorianCalendar calendar = new GregorianCalendar(TimeZone.getDefault());
+		        calendar.setTimeInMillis(start);
+		        date = sdf.format(calendar.getTime());
+		        
+		        System.out.println(date);
+			}
+			
+    		final Marker marker = new ValueMarker(t/1000.0);
+            marker.setPaint(Color.black);
+            marker.setLabel("M="+(i+1)+" ("+date+")");
+            marker.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
+            marker.setLabelTextAnchor(TextAnchor.TOP_LEFT);
+            chart.getXYPlot().addDomainMarker(marker);
 			
 			for(int j=0; j<m.data.size(); j++) {
 				
@@ -372,13 +426,13 @@ public class GSR_read implements ActionListener, KeyListener {
 				t += m.dt;
 				
 				//if(r.gsr>0) {
-			    gsr_series.add(t, r.gsr);
+			    gsr_series.add(t/1000.0, r.gsr);
 				//}
-				if(r.bpm>0) bpm_series.add(t, r.bpm);
-				if(r.mark>0) mark_series.add(t, 0);
-				if(r.bat>0) bat_series.add(t, r.bat);
+				if(r.bpm>0) bpm_series.add(t/1000.0, r.bpm);
+				if(r.mark>0) mark_series.add(t/1000.0, 0);
+				if(r.bat>0) bat_series.add(t/1000.0, r.bat);
 				
-				for(int k=0; k<r.pp.size(); k++) pp_series.add(t, r.pp.get(k));
+				for(int k=0; k<r.pp.size(); k++) pp_series.add(t/1000.0, r.pp.get(k));
 			}
 		}
 			
@@ -440,6 +494,13 @@ public class GSR_read implements ActionListener, KeyListener {
 		System.out.println("Command "+arg0.getActionCommand());
 		
 		if(arg0.getActionCommand().compareTo("save")==0) Save();
+		
+		if(arg0.getActionCommand().compareTo("sync")==0) {
+			int res = GSR.Connect();
+			GSR.WriteTS();
+			GSR.Disconnect();
+		}
+
 		
 		if(arg0.getActionCommand().compareTo("erase")==0) {
 			
@@ -598,7 +659,9 @@ public class GSR_read implements ActionListener, KeyListener {
 			
 			double g = ((int)(r.gsr*1000.0)/1000.0);
 			
-			output.write(""+r.t+"\t");
+			long time = r.t + (m.ts + m.msec - m.tsmsec);
+			
+			output.write(""+time+"\t");
 			output.write(""+(g)+"\t");
 			if(r.bpm>0)  output.write(""+r.bpm+"\t");   else output.write("\t");
 			if(r.mark>0) output.write(""+r.mark+"\t");  else output.write("\t");
