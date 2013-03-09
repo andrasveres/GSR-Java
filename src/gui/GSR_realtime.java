@@ -55,6 +55,9 @@ public class GSR_realtime implements ActionListener, KeyListener, WindowListener
 	
 	
 	double GetS(double D) {
+		
+		return D / 1000.0;
+		/*
 	    double vref = 3 * 5.0 / 24.0;
 	    double U = (5.0-vref) * D / 1024;
 	    double I = (U) / 470000.0;
@@ -63,6 +66,7 @@ public class GSR_realtime implements ActionListener, KeyListener, WindowListener
 	    
 	    //System.out.println("uS="+(S*1e6));
 		return S*1e6;
+		*/
 	}
 	
 	GSR_realtime() throws InterruptedException

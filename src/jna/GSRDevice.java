@@ -50,6 +50,27 @@ public class GSRDevice {
 		return connected;
 	}
 	
+	public int GetMemorySize() {
+		System.out.println("GetMemorySize");
+		
+		byte[] buff = new byte[64];
+					
+		buff[1] = (byte) 0x30;
+
+		int n=hid.IntSendOutputReport(buff, 65);
+						
+		ByteBuffer bb = ByteBuffer.allocate(65);		
+		hid.IntReadInputReport(bb, 65);
+		
+		if(bb.array()[1]!=0x30) System.exit(0);
+			
+		int s = bb.array()[2];
+		
+		System.out.println(""+s);
+		
+		return s * 2 * 65536;
+	}
+	
 	void SetConnected() {
 		System.out.println("SetConnected");
 	
@@ -119,7 +140,8 @@ public class GSRDevice {
 		int b2 = (0xFF & bb.get(3));
 		int b3 = (0xFF & bb.get(4));
 		int b4 = (0xFF & bb.get(5));
-		double gsr = (b2*256 + b1)/4.0;
+		//double gsr = (b2*256 + b1)/4.0;
+		double gsr = (b2*256 + b1);
 		
 		return gsr;
 	}

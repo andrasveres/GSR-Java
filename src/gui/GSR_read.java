@@ -62,7 +62,8 @@ public class GSR_read implements ActionListener, KeyListener {
 		double gsr;
 		int bpm;
 		int mark;
-		int bat;
+		int vref;
+		double bat;
 		Vector<Integer> pp = new Vector<Integer>();
 		
 	}
@@ -72,7 +73,6 @@ public class GSR_read implements ActionListener, KeyListener {
 		long ts=0;
 		long tsmsec=0;
 		long msec=0;
-
 		
 		long dt=250;
 		Vector<Record> data = new Vector<Record>();
@@ -94,7 +94,7 @@ public class GSR_read implements ActionListener, KeyListener {
 	int T_BPM = 4;
 	int T_PP = 5;
 	int T_TS = 6;
-
+	int T_REF = 7;
 	
 	int[] mem = new int[65536*2];
 	
@@ -122,8 +122,8 @@ public class GSR_read implements ActionListener, KeyListener {
 
     GSRDevice GSR = new GSRDevice();    
 
-	double GetS(double D) {
-	    double vref = 3 * 5.0 / 24.0;
+	double GetS(double D, int REF) {
+	    double vref = REF * 5.0 / 24.0;
 	    double U = (5.0-vref) * D / 1024;
 	    double I = (U) / 470000.0;
 	    
@@ -273,6 +273,12 @@ public class GSR_read implements ActionListener, KeyListener {
 			System.exit(0);
 	    }
 	    
+	    int memsize = GSR.GetMemorySize();
+	    
+		JOptionPane.showMessageDialog(chart_frame, "Device="+version+"" +
+				"\nMemory="+memsize/1024+"kbyte");
+	    
+	    int REF=3;
 	    int i=0;
 	    do {
 	    	int[] b = GSR.rom.ReadEEPROMBlock(i);
@@ -299,6 +305,8 @@ public class GSR_read implements ActionListener, KeyListener {
 	    		t=0;
 	    		rec = new Record();
 	    		rec.t=0;
+	    		
+	    		REF=3;
 	    			    		
 	    	}
 	    		    	
@@ -314,7 +322,7 @@ public class GSR_read implements ActionListener, KeyListener {
 		        if(type==0) break;
 		        
 		        if(type == T_GSR) {
-		        	rec.gsr = GetS(data/4.0);
+		        	rec.gsr = GetS(data/4.0, REF);
 		        	
 		        	m.data.add(rec);
 		        	rec = new Record();
@@ -328,8 +336,12 @@ public class GSR_read implements ActionListener, KeyListener {
 		        	rec.t = t;
 		        	
 		        } else if(type == T_BPM) rec.bpm = data;  	
-		        else if(type == T_BAT) rec.bat = data;  	
+		        else if(type == T_BAT) {
+		        	rec.bat = data * 5.0 / 1024.0;
+		        	System.out.println("BAT"+rec.bat);
+		        }
 		        else if(type == T_MARK) rec.mark = data;
+		        else if(type == T_REF) {REF = data; rec.vref = data;}
 		        else if(type == T_PP) rec.pp.add(data);  	
 		        else if(type == T_TS) {
 		        	ByteBuffer bb = ByteBuffer.allocate(65);
@@ -412,7 +424,7 @@ public class GSR_read implements ActionListener, KeyListener {
 		        System.out.println(date);
 			}
 			
-    		final Marker marker = new ValueMarker(t/1000.0);
+    		Marker marker = new ValueMarker(t/1000.0);
             marker.setPaint(Color.black);
             marker.setLabel("M="+(i+1)+" ("+date+")");
             marker.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
@@ -431,6 +443,15 @@ public class GSR_read implements ActionListener, KeyListener {
 				if(r.bpm>0) bpm_series.add(t/1000.0, r.bpm);
 				if(r.mark>0) mark_series.add(t/1000.0, 0);
 				if(r.bat>0) bat_series.add(t/1000.0, r.bat);
+				
+				if(r.vref>0) {
+					marker = new ValueMarker(t/1000.0);
+		            marker.setPaint(Color.yellow);
+		            marker.setLabel("VREF="+r.vref);
+		            marker.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
+		            marker.setLabelTextAnchor(TextAnchor.TOP_LEFT);
+		            chart.getXYPlot().addDomainMarker(marker);
+				}
 				
 				for(int k=0; k<r.pp.size(); k++) pp_series.add(t/1000.0, r.pp.get(k));
 			}
