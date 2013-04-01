@@ -4,37 +4,41 @@ package gui;
 
 
 
-import java.awt.*;
-import java.awt.event.*;
-import java.nio.ByteBuffer;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.awt.RenderingHints;
+import java.awt.Stroke;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 
-import javax.swing.*;
-import javax.swing.table.*;
-import javax.swing.text.*;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 
-import jna.EEPROM;
 import jna.GSRDevice;
 import jna.GSRDevice.pulse;
-import jna.MyHID;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.axis.ValueAxis;
 import org.jfree.chart.plot.PlotOrientation;
-import org.jfree.chart.renderer.xy.StandardXYItemRenderer;
-import org.jfree.chart.renderer.xy.XYItemRenderer;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
-import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
-import org.jfree.util.ShapeUtilities;
 
 public class GSR_realtime implements ActionListener, KeyListener, WindowListener {
 	GSRDevice GSR = new GSRDevice();
 
-	String VERSION="PsyGSR 0.2.1d";
+	String VERSION="PsyGSR 0.2.1f";
 
 	
 	//double ymax = 2000;
@@ -280,6 +284,7 @@ public class GSR_realtime implements ActionListener, KeyListener, WindowListener
 			else System.out.println(" Send OK");
 			*/
 			
+			
 			try {
 				Thread.sleep(100);
 			} catch (InterruptedException e1) {
@@ -324,6 +329,7 @@ public class GSR_realtime implements ActionListener, KeyListener, WindowListener
 		    
 			bpm_series.add(dt, p.bpm);
 			avg_pulse_series.add(dt, p.avg_pulse);
+			if(p.avg_pulse_fast==0) p.avg_pulse_fast=-1;
 			avg_pulse_fast_series.add(dt, p.avg_pulse_fast);
 
 			n++;

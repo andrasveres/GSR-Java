@@ -1,6 +1,14 @@
 package jna;
 
+import java.io.IOException;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+import javax.swing.JOptionPane;
+
+import ntp.SntpClient;
 
 public class GSRDevice {
 	MyHID hid;
@@ -14,10 +22,10 @@ public class GSRDevice {
 		System.out.println("gethandle "+res+" isopened "+hid.isOpened());
 		if(!res) return -1;
 		
-		int c = CheckConnected();
-		if(c==1) return -2;
+		//int c = CheckConnected();
+		//if(c==1) return -2;
 		
-		SetConnected();
+		//SetConnected();
 		
 		//c = CheckConnected();
 		//if(c==0) System.exit(0);
@@ -31,7 +39,7 @@ public class GSRDevice {
 		System.out.println("CheckConnected");
 
 		
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 					
 		buff[1] = (byte) 0x36;
 
@@ -41,11 +49,11 @@ public class GSRDevice {
 		hid.IntReadInputReport(bb, 65);
 		
 		System.out.println(""+bb.array()[1]);
-		if(bb.array()[1]!=0x36) System.exit(0);
+		if(bb.array()[1]!=0x36) return -1;
 			
 		int connected = bb.array()[2];
 		
-		System.out.println(""+connected);
+		System.out.println("Connected response: "+connected);
 		
 		return connected;
 	}
@@ -53,7 +61,7 @@ public class GSRDevice {
 	public int GetMemorySize() {
 		System.out.println("GetMemorySize");
 		
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 					
 		buff[1] = (byte) 0x30;
 
@@ -74,7 +82,7 @@ public class GSRDevice {
 	void SetConnected() {
 		System.out.println("SetConnected");
 	
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 					
 		buff[1] = (byte) 0x34;
 
@@ -90,7 +98,7 @@ public class GSRDevice {
 	void ResetConnected() {
 		System.out.println("ResetConnected");
 
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 					
 		buff[1] = (byte) 0x35;
 
@@ -107,7 +115,7 @@ public class GSRDevice {
 	public String ReadVersion() {
 		System.out.println("ReadVersion");
 
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 		
 		buff[1] = (byte) 0x38;
 
@@ -127,8 +135,59 @@ public class GSRDevice {
 		return version;		
 	}
 	
+	public String ReadName() {
+		System.out.println("ReadName");
+
+		byte[] buff = new byte[65];
+		
+		buff[1] = (byte) 0x81;
+
+		int n=rom.hid.IntSendOutputReport(buff, 65);
+				
+		ByteBuffer bb = ByteBuffer.allocate(65);
+		rom.hid.IntReadInputReport(bb, 65);
+		
+		if(bb.array()[2]!='%') return "WRONG NAME";
+		
+		String name="";
+		for(int i=0; i<16; i++) {
+	       byte b = bb.array()[i+3];
+	       if(b==0) break;
+		   name+= (char)b;
+		}
+		
+		return name;		
+	}	
+	
+	public int WriteName(String name) {
+		System.out.println("WriteName");
+
+		byte[] buff = new byte[65];
+		
+		buff[1] = (byte) 0x80;
+
+		if(name.length()>15) return-1;
+		
+		buff[2] = '%';
+		
+		for(int i=0; i<name.length(); i++) {
+           buff[i+3] = (byte) name.charAt(i);
+		}
+		
+		//for(int i=0; i<20; i++) {
+		//	System.out.println(""+i+" "+buff[i]+""+(char)buff[i]);
+		//}
+		
+		int n=rom.hid.IntSendOutputReport(buff, 65);
+				
+		ByteBuffer bb = ByteBuffer.allocate(65);
+		rom.hid.IntReadInputReport(bb, 65);
+						
+		return 1;		
+	}	
+	
 	public double ReadGSR() {
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 		ByteBuffer bb = ByteBuffer.allocate(65);
 
 		buff[1] = (byte) 0x37; // GSR
@@ -154,7 +213,7 @@ public class GSRDevice {
 	}
 	
 	public pulse ReadPulse() {
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 		ByteBuffer bb = ByteBuffer.allocate(65);
 		int b0;		
 		
@@ -192,30 +251,124 @@ public class GSRDevice {
 		return p;
 	}
 	
+	public void AddMarker() {
+		System.out.println("AddMarker");
+
+		byte[] buff = new byte[65];
+		ByteBuffer bb = ByteBuffer.allocate(65);
+		bb.order(ByteOrder.LITTLE_ENDIAN);
+
+		buff[1] = 0x62;
+				
+		hid.IntSendOutputReport(buff, 65);
+		hid.IntReadInputReport(bb, 65);
+
+	}
+	
+	public void StartMeas() {
+		System.out.println("StartMeas");
+
+		byte[] buff = new byte[65];
+		ByteBuffer bb = ByteBuffer.allocate(65);
+		bb.order(ByteOrder.LITTLE_ENDIAN);
+
+		buff[1] = 0x63;
+				
+		hid.IntSendOutputReport(buff, 65);
+		hid.IntReadInputReport(bb, 65);
+
+	}
+	
 	public void WriteTS() {
 		System.out.println("WriteTS");
 
-		byte[] buff = new byte[64];
+		byte[] buff = new byte[65];
 		ByteBuffer bb = ByteBuffer.allocate(65);
-		
+		bb.order(ByteOrder.LITTLE_ENDIAN);
+
 		buff[1] = 0x60;
 		
-		long ts = System.currentTimeMillis();
-				
+		long ts=0;
+		SntpClient ntp = new SntpClient();
+		try {
+			ntp.Connect();
+			ts = ntp.GetNtp();
+		} catch (SocketException e) {
+			JOptionPane.showMessageDialog(null, "Internet ido nem elerheto!");
+			e.printStackTrace();
+		} catch (UnknownHostException e) {
+			JOptionPane.showMessageDialog(null, "Internet ido nem elerheto!");
+			e.printStackTrace();
+		} catch (IOException e) {
+			JOptionPane.showMessageDialog(null, "Internet ido nem elerheto!");
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 		bb.putLong(ts);
+		bb.rewind();
 		
 		for(int i=0; i<8; i++) {
 			buff[i+2] = bb.get(i);
-			System.out.println("B "+buff[i+2]);
+			//System.out.println("B "+buff[i+2]);
 		}
 		
 		hid.IntSendOutputReport(buff, 65);
 		hid.IntReadInputReport(bb, 65);
 
-		System.out.println("WriteTS finished");
+		System.out.println("WriteTS finished "+ts);
 
 	}
 
+	public long ReadTS() {
+		System.out.println("ReadTS");
+
+		byte[] buff = new byte[65];
+		ByteBuffer bb = ByteBuffer.allocate(65);
+		bb.order(ByteOrder.LITTLE_ENDIAN);
+		
+		buff[1] = 0x61;
+		
+		hid.IntSendOutputReport(buff, 65);
+		hid.IntReadInputReport(bb, 65);
+
+
+		bb.get();
+		bb.get();
+		long ts = bb.getLong();
+		int tsmsec = bb.getInt();
+		int msec = bb.getInt();
+		
+		//int c0 = bb.get();
+		//int c1 = bb.get();
+		//int c2 = bb.get();
+		//int c3 = bb.get();
+		
+		//System.out.println(""+ts+" "+tsmsec+" "+msec);
+		
+		long t = ts + msec - tsmsec;
+		return t;
+	}
+	
+	public long ReadMsec() {
+		System.out.println("ReadMsec");
+
+		byte[] buff = new byte[65];
+		ByteBuffer bb = ByteBuffer.allocate(65);
+		bb.order(ByteOrder.LITTLE_ENDIAN);
+		
+		buff[1] = 0x50;
+		
+		hid.IntSendOutputReport(buff, 65);
+		hid.IntReadInputReport(bb, 65);
+
+		bb.get();
+		bb.get();
+		int msec = bb.getInt();
+		
+		return msec;
+	}
+	
 	public void Disconnect() {
 		System.out.println("Disconnect");
 	    ResetConnected();

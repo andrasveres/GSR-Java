@@ -3,22 +3,10 @@ package jna;
 // GSR communicates with GSR 0.1 board
 
 
-import java.awt.*;
-import java.awt.event.*;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
-import javax.swing.*;
-import javax.swing.table.*;
-import javax.swing.text.*;
-
-
-import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.plot.PlotOrientation;
-import org.jfree.data.xy.XYDataset;
-import org.jfree.data.xy.XYSeries;
-import org.jfree.data.xy.XYSeriesCollection;
 
 public class TestTimer  {
 	MyHID myHID = new MyHID();
@@ -37,41 +25,54 @@ public class TestTimer  {
 	void CheckTime() throws InterruptedException {
 		byte[] buff = new byte[64];
 
-		double t_start = System.currentTimeMillis();
-
+		long t_start = 0;
+        long tick_start = 0;
 		long msec_start=0;
+		
+		long last_tick=0;
 		
 		do {
 			
 			buff[1] = (byte) 0x50; // MSEC
 						
+			long t = System.currentTimeMillis();
 			myHID.IntSendOutputReport(buff, 65);	
 						
 			ByteBuffer bb = ByteBuffer.allocate(65);		
+			bb.order(ByteOrder.LITTLE_ENDIAN);
+			
 			myHID.IntReadInputReport(bb, 65);
-						
-			double t = System.currentTimeMillis();
-			Thread.sleep(1000);
+			long tt = System.currentTimeMillis()-t;
 			
-			int b0 = (0xFF & bb.array()[1]);
-			int b1 = (0xFF & bb.array()[2]);
-			int b2 = (0xFF & bb.array()[3]);
-			int b3 = (0xFF & bb.array()[4]);
-			int b4 = (0xFF & bb.array()[5]);
+			bb.get();
+			bb.get();
+			long msec = bb.getInt();
+			long tick = bb.getInt();
 			
-			long msec = b1 + b2*256 + b3*65536 + b4*65536*256;
+			//System.out.println("C"+c);
+			
+			//long msec = b1 + b2*256 + b3*65536 + b4*65536*256;
 
 			if(msec_start==0) {
 				msec_start = msec;
+				t_start = t;
+				tick_start = tick;
 				continue;
 			}
 			
-			double dmsec = msec - msec_start;
-			double dt = t - t_start;
+			long dmsec = msec - msec_start;
+			long dt = t - t_start;
+						
+			if(dt>0) {
+				System.out.println("MSEC "+dmsec+" "+dt+" "+(dt-dmsec)+" Error(sec) after 1 hour:"+(float)(dt-dmsec)/dt*3600.0+" tt "+tt);
+				//System.out.println("TICK "+(tick-tick_start)+" msec "+(tick-tick_start)*256.0/32768.0*1000.0+" tt "+tt);
+			}
 			
+			long s1 = System.currentTimeMillis();
+			Thread.sleep(10000);
+			long s = System.currentTimeMillis()-s1;
+			//System.out.println("sleep "+s);
 			
-			
-			System.out.println("MSEC "+dmsec+" "+dt+" Error(sec) after 1 hour:"+(dt-dmsec)/dt*3600.0/1000.0);
 			
 		} while(true);
 	}

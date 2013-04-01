@@ -1,6 +1,5 @@
 package jna;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 
@@ -26,7 +25,7 @@ public class EEPROM {
 		
 	}
 		
-	public int[] ReadEEPROMBlock(int addr) {
+	public int[] ReadEEPROMBlock(long addr) {
 		byte[] buff = new byte[64];
 		
 		buff[1] = (byte) 0x40;
@@ -56,7 +55,28 @@ public class EEPROM {
 		return b;		
 	}
 	
-	public int ReadEEPROMByte(int addr) {
+	public void WriteEEPROMByte(long addr, int c) {
+		byte[] buff = new byte[64];
+		
+		buff[1] = (byte) 0x70;
+		
+		buff[2] = (byte) (addr & 0x000000ff);
+		buff[3] = (byte) ((addr & 0x0000ff00)>>>8);
+		buff[4] = (byte) ((addr & 0x00ff0000)>>>16);
+		buff[5] = (byte) ((addr & 0xff000000)>>>24);		
+		
+		buff[6] = (byte)c;
+		
+		while (hid.IntSendOutputReport(buff, (short)65)!=0) {
+			System.out.println("40 Send failed");
+			System.exit(0);
+		}
+		
+		ByteBuffer bb = ByteBuffer.allocate(65); 		
+		int n = hid.IntReadInputReport(bb, 65);		
+	}
+	
+	public int ReadEEPROMByte(long addr) {
 		byte[] buff = new byte[64];
 		
 		buff[1] = (byte) 0x39;
@@ -86,15 +106,20 @@ public class EEPROM {
 
 		EEPROM e = new EEPROM(hid);
 
+		int c=0;
+		for(int i=0; i<65536*4; i+=4096) {
 		
-		System.out.println("Read");
-		int[] b = e.ReadEEPROMBlock(0);
-		System.out.println("OK");
-		
-		for(int i=0; i<b.length; i++) {
-			System.out.print(" "+b[i]);
+			e.WriteEEPROMByte(i, c);
+
+			c++;
 		}
 		
+		for(int i=0; i<65536*4; i+=4096) {
+			
+			c = e.ReadEEPROMByte(i);
+			System.out.print(" "+c);
+		}
+				
 		hid.CloseHIDDevice();
 
 	}

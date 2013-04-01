@@ -1,61 +1,64 @@
 package gui;
 
-// GSR communicates with GSR 0.1 board
+// GSR communicates with GSR board
 
 
-import java.awt.*;
-import java.awt.event.*;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.PathIterator;
-import java.awt.geom.Point2D;
-import java.awt.geom.Rectangle2D;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.NumberFormat;
+import java.nio.ByteOrder;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.Vector;
 
-import javax.swing.*;
-import javax.swing.table.*;
-import javax.swing.text.*;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.JTextField;
+import javax.swing.SwingWorker;
 
-import jna.EEPROM;
 import jna.GSRDevice;
 import jna.HardReset;
-import jna.MyHID;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
-import org.jfree.chart.axis.CategoryAxis;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.axis.ValueAxis;
 import org.jfree.chart.plot.Marker;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.ValueMarker;
 import org.jfree.chart.renderer.xy.StandardXYItemRenderer;
-import org.jfree.chart.renderer.xy.XYItemRenderer;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
-import org.jfree.data.statistics.MeanAndStandardDeviation;
-import org.jfree.data.xy.XYDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 import org.jfree.ui.RectangleAnchor;
 import org.jfree.ui.TextAnchor;
-import org.jfree.util.ShapeList;
 import org.jfree.util.ShapeUtilities;
 
 
 public class GSR_read implements ActionListener, KeyListener {
 	
-	String VERSION="PsyGSR 0.2.1d";
+	String VERSION="PsyGSR 0.2.1f";
+	String name="";
+	JTextField myTitle = new JTextField();
+	
+	int memsize;
 	
 	class Record {	
 		long t;
@@ -65,6 +68,7 @@ public class GSR_read implements ActionListener, KeyListener {
 		int vref;
 		double bat;
 		Vector<Integer> pp = new Vector<Integer>();
+		public int hlvd=0;
 		
 	}
 	
@@ -83,20 +87,21 @@ public class GSR_read implements ActionListener, KeyListener {
 
 	JFrame chart_frame = new JFrame(VERSION);
 	
-    JProgressBar progress = new JProgressBar(0,2*65536);
+    JProgressBar progress = new JProgressBar(0,0);
 	
 	JCheckBox c_bat = new JCheckBox("Show battery");
 	JCheckBox c_pp = new JCheckBox("Show IBT");
-
+	JCheckBox c_vref = new JCheckBox("Show scale change");
+	
 	int T_GSR = 1;
 	int T_MARK = 2; 
 	int T_BAT = 3;
 	int T_BPM = 4;
 	int T_PP = 5;
-	int T_TS = 6;
+	int T_HLVD = 6;
 	int T_REF = 7;
 	
-	int[] mem = new int[65536*2];
+	int[] mem = new int[memsize];
 	
 	double ymax = 2000;
 	double dx = 60;
@@ -131,6 +136,12 @@ public class GSR_read implements ActionListener, KeyListener {
 	    
 	    //System.out.println("uS="+(S*1e6));
 		return S*1e6;
+	}
+	
+	void SetTitle() {
+		String title = (VERSION+" Name='"+name+"' ("+memsize/1024+"kbytes memory)");
+		chart_frame.setTitle(title);
+		chart_frame.invalidate();
 	}
 	
 	GSR_read()
@@ -195,6 +206,8 @@ public class GSR_read implements ActionListener, KeyListener {
         //chart.getXYPlot().setRenderer(0, renderer2);
         chart.getXYPlot().setRenderer(1, renderer2);
         
+        chart.getXYPlot().getRangeAxis().setAutoRangeMinimumSize(0.2);
+        
         
 		//chart.getXYPlot().getRangeAxis(0).setRange(0, ymax);
         
@@ -213,32 +226,39 @@ public class GSR_read implements ActionListener, KeyListener {
         JButton b_save = new JButton("Save");
         JButton b_erase = new JButton("Erase memory");
         JButton b_sync = new JButton("Synchronize");
+        JButton b_rename = new JButton("Rename");
               
         b_save.setActionCommand("save");
         b_erase.setActionCommand("erase");
         b_sync.setActionCommand("sync");
-        
+        b_rename.setActionCommand("rename");
+
         b_erase.addActionListener(this);
         b_save.addActionListener(this);
         b_sync.addActionListener(this);
-        
+        b_rename.addActionListener(this);
+
         b_save.setEnabled(false);
         b_erase.setEnabled(false);
         b_sync.setEnabled(false);
-        
+        b_rename.setEnabled(false);
+
         JPanel bpanel = new JPanel();
         chart_frame.add(bpanel, BorderLayout.SOUTH);
        
         bpanel.add(b_save);
         bpanel.add(b_erase);
         bpanel.add(b_sync);
-        
+        bpanel.add(b_rename);
+
         bpanel.add(c_bat);
         bpanel.add(c_pp);
-        
+        //bpanel.add(c_vref);
+    
         c_bat.addActionListener(this);
         c_pp.addActionListener(this);
-        
+        c_vref.addActionListener(this);
+
         chart_frame.setVisible(true);
         chart_frame.pack();		
         
@@ -251,15 +271,12 @@ public class GSR_read implements ActionListener, KeyListener {
         //rom.Connect();
 				
 		double alpha = 0.3;
-		double f = 0;
 		
 	    //double start = System.currentTimeMillis()/1000.0;
 	    
 	    //ReadVersion();
 
 	    int curr_meas=0;
-	    
-	    int block = 0;
 	    
 	    long t=0;
 	    Record rec = new Record();
@@ -272,11 +289,19 @@ public class GSR_read implements ActionListener, KeyListener {
 			JOptionPane.showMessageDialog(chart_frame, "Version mismatch! \nDevice="+version+" Program="+VERSION);
 			System.exit(0);
 	    }
+	   
 	    
-	    int memsize = GSR.GetMemorySize();
+	    name = GSR.ReadName();
+	    System.out.println("name "+name);
 	    
-		JOptionPane.showMessageDialog(chart_frame, "Device="+version+"" +
-				"\nMemory="+memsize/1024+"kbyte");
+	    memsize = GSR.GetMemorySize();
+	    
+	    progress.setMaximum(memsize);
+	    
+		//JOptionPane.showMessageDialog(chart_frame, "Device="+version+"" +
+		//		"\nMemory="+memsize/1024+"kbyte");
+	    
+	    SetTitle();
 	    
 	    int REF=3;
 	    int i=0;
@@ -295,6 +320,8 @@ public class GSR_read implements ActionListener, KeyListener {
 	    		break;
 	    	}
 	    	
+	    	int pos = 2;
+	    	
 	    	if(curr_meas!=meas) {
 	    		
 	    		curr_meas = meas;
@@ -306,12 +333,35 @@ public class GSR_read implements ActionListener, KeyListener {
 	    		rec = new Record();
 	    		rec.t=0;
 	    		
-	    		REF=3;
+	        	ByteBuffer bb = ByteBuffer.allocate(65);
+	        	bb.order(ByteOrder.LITTLE_ENDIAN);
+
+	        	long ll=0;
+	        	
+	        	for(int ii=0; ii<8; ii++) {
+	        		bb.put((byte)(b[pos+ii]));
+	        		//System.out.println("B "+b[j+ii]);
+	        	}
+
+	        	pos+=8;
+	        	
+	        	// set timestamp
+	        	m.ts = bb.getLong(0);
+	        	
+	        	m.tsmsec = b[pos+3]*256*256*256 + b[pos+2] * 256*256 + b[pos+1] * 256 + b[pos];
+	        	pos+=4;
+
+	        	m.msec = b[pos+3]*256*256*256 + b[pos+2] * 256*256 + b[pos+1] * 256 + b[pos];
+	        	pos+=2;
+
+	        	// j will be increased by additional two in for cycle
+	        			           
+	           System.out.println("TS "+m.ts+" TSmsec "+m.tsmsec+" msec "+m.msec);	    		
 	    			    		
 	    	}
 	    		    	
-	    	int j=0; 
-	    	for(j=2; j<64; j+=2) {
+	    	int j; 
+	    	for(j=pos; j<64; j+=2) {
 	    		
 	    		int type = (b[j+1] & 0xe0) >>> 5;
 		
@@ -336,38 +386,13 @@ public class GSR_read implements ActionListener, KeyListener {
 		        	rec.t = t;
 		        	
 		        } else if(type == T_BPM) rec.bpm = data;  	
-		        else if(type == T_BAT) {
-		        	rec.bat = data * 5.0 / 1024.0;
-		        	System.out.println("BAT"+rec.bat);
-		        }
+		        else if(type == T_BAT) rec.bat = data * 5.0 / 1024.0;		        
 		        else if(type == T_MARK) rec.mark = data;
 		        else if(type == T_REF) {REF = data; rec.vref = data;}
 		        else if(type == T_PP) rec.pp.add(data);  	
-		        else if(type == T_TS) {
-		        	ByteBuffer bb = ByteBuffer.allocate(65);
-		        	long ll=0;
-		        	
-		        	j+=2;
-		        	
-		        	for(int ii=0; ii<8; ii++) {
-		        		bb.put((byte)(b[j+ii]));
-		        		//System.out.println("B "+b[j+ii]);
-		        	}
-
-		        	j+=8;
-		        	
-		        	// set timestamp
-		        	m.ts = bb.getLong(0);
-		        	
-		        	m.tsmsec = b[j+3]*256*256*256 + b[j+2] * 256*256 + b[j+1] * 256 + b[j];
-		        	j+=4;
-
-		        	m.msec = b[j+3]*256*256*256 + b[j+2] * 256*256 + b[j+1] * 256 + b[j];
-		        	j+=2;
-
-		        	// j will be increased by additional two in for cycle
-		        			           
-		           System.out.println("TS "+m.ts+" TSmsec "+m.tsmsec+" msec "+m.msec);
+		        else if(type == T_HLVD) {
+                   //System.out.println("HLVD");
+                   rec.hlvd++;
 		        }
 		        else {
 		        	System.out.println("addr "+j+" UNKNOWN TYPE "+type);
@@ -380,7 +405,7 @@ public class GSR_read implements ActionListener, KeyListener {
 	    	
 	        progress.setValue(i);
 
-	    } while(i<65536*2);
+	    } while(i<memsize);
 	    	
 	    GSR.Disconnect();
 	    	    
@@ -389,14 +414,16 @@ public class GSR_read implements ActionListener, KeyListener {
 	    b_save.setEnabled(true);
         b_erase.setEnabled(true);
         b_sync.setEnabled(true);
-        
+        b_rename.setEnabled(true);
+
 	    DisplaySeries();
 	    
 
-	    if(i==0) JOptionPane.showMessageDialog(chart_frame, "GSR memory is empty");
-	    else JOptionPane.showMessageDialog(chart_frame, "Data loaded from GSR device.\n" +
+	    if(i==0) JOptionPane.showMessageDialog(chart_frame, "GSR memory is empty (name='"+name+"')");
+	    else JOptionPane.showMessageDialog(chart_frame, "Data loaded from GSR device " +
+	    		"\nName='"+name+"'" +
 	    		"\nMeasurements: " + meas_list.size()+
-	    		"\nMemory: "+(int)(i/65536.0/2.0*1000.0)/10.0+"%");
+	    		"\nMemory: "+(int)(i/memsize*1000.0)/10.0+"%");
 
 		
 		//System.exit(0);
@@ -442,13 +469,14 @@ public class GSR_read implements ActionListener, KeyListener {
 				//}
 				if(r.bpm>0) bpm_series.add(t/1000.0, r.bpm);
 				if(r.mark>0) mark_series.add(t/1000.0, 0);
-				if(r.bat>0) bat_series.add(t/1000.0, r.bat);
+				//if(r.bat>0) bat_series.add(t/1000.0, r.bat);
+				if(r.hlvd>0) bat_series.add(t/1000.0, r.hlvd);
 				
 				if(r.vref>0) {
 					marker = new ValueMarker(t/1000.0);
 		            marker.setPaint(Color.yellow);
-		            marker.setLabel("VREF="+r.vref);
-		            marker.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
+		            marker.setLabel("scale="+r.vref);
+		            marker.setLabelAnchor(RectangleAnchor.CENTER);
 		            marker.setLabelTextAnchor(TextAnchor.TOP_LEFT);
 		            chart.getXYPlot().addDomainMarker(marker);
 				}
@@ -521,6 +549,33 @@ public class GSR_read implements ActionListener, KeyListener {
 			GSR.WriteTS();
 			GSR.Disconnect();
 		}
+		
+		if(arg0.getActionCommand().compareTo("rename")==0) {
+
+			JTextField sp = new JTextField();
+			
+			int r = JOptionPane.showConfirmDialog(chart_frame, sp, "New name? (old = '"+name+"')", JOptionPane.OK_CANCEL_OPTION);
+			
+			if(r!=JOptionPane.OK_OPTION) return;
+			String s = sp.getText();
+			if(s.length()==0) return;
+			
+			r = JOptionPane.showConfirmDialog(chart_frame, "Are you sure? New name = "+s, "Warning!", JOptionPane.YES_NO_OPTION);
+			if(r!=JOptionPane.OK_OPTION) return;
+
+			System.out.println("ff "+r);
+			
+			int res = GSR.Connect();
+			GSR.WriteName(s);
+			String name = GSR.ReadName();
+			
+			if(name.compareTo(s)!=0) JOptionPane.showMessageDialog(chart_frame, "ERROR Setting new name!");
+			
+			SetTitle();
+			
+			//GSR.WriteTS();
+			GSR.Disconnect();
+		}
 
 		
 		if(arg0.getActionCommand().compareTo("erase")==0) {
@@ -537,6 +592,7 @@ public class GSR_read implements ActionListener, KeyListener {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+			System.out.println("Hard reset command");
 						
 			SwingWorker worker = new SwingWorker<Void, Void>() {
 			    @Override
@@ -572,7 +628,7 @@ public class GSR_read implements ActionListener, KeyListener {
 			    	
 			    	progress.setString("Checking");
 			    				    		
-			    	for(int i=0; i<2*65536; i+=64) {
+			    	for(long i=0; i<memsize; i+=64) {
 		    			int d = GSR.rom.ReadEEPROMByte(i);
 		    			if(d!=0) {
 		    				JOptionPane.showMessageDialog(chart_frame, "ERROR! Please restart program and try erasing again!");
@@ -664,13 +720,15 @@ public class GSR_read implements ActionListener, KeyListener {
 		//NumberFormat format = NumberFormat.getInstance(Locale.GERMAN);
 		//format.setMaximumFractionDigits(3);
 
-		String fname = "gsr_"+(i+1) ;				
+		String fname = "gsr_"+(i+1)+"_"+name ;				
 		fname += ".txt";
 			
 		File file= new File(dir.getAbsolutePath()+"\\"+fname);
 		BufferedWriter output = new BufferedWriter(new FileWriter(file));
 						
 		Meas m = meas_list.get(i);
+		
+		output.write("Name\t"+name+"\tVersion\t"+VERSION+"\r\n");
 								
 		output.write("Time\tGSR\tPulse\tMarker\tBattery\tIBT\r\n");
 		
